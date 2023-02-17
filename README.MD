@@ -1,6 +1,6 @@
 # SmoothBrain
 
-Version 0.1.0
+Version 0.1.1
 
 SmoothBrain is an Anki plugin that gets your highlights from [Readwise][readwise]
 and generates flashcards for them using [OpenAI's GPT API][openai].

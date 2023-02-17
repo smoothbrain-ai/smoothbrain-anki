@@ -113,8 +113,9 @@ def do_sync():
                     note = mw.col.new_note(model)
                     note["Front"] = question
                     note["Back"] = answer
+                    # TODO: Use a single CollectionOp to create notes instead of multiple
                     add_note(parent=mw, note=note, target_deck_id=deck_id.id).run_in_background()
-            for doc in docs[:1]:
+            for doc in docs:
                 query_for_ai_flashcards(doc).success(update_card).run_in_background()
         # TODO: Make the deck have a certain template
         add_deck(parent=mw, name=DECK_NAME).success(generate_flashcards).run_in_background()
