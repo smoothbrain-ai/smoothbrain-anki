@@ -3,4 +3,4 @@ __pycache__/
 
 # Ignore config non-defaults (such as secrets)
 meta.json
-
+*.log
