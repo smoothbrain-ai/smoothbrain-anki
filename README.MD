@@ -29,7 +29,7 @@ needs to be completed manually.
 
 - Create a ticket on GitHub for bug reports and feature requests.
 - Follow the [git-flow branching scheme][git-flow-instructions] (use the [git-flow CLI tool if you wish][git-flow-cli]).
-- Bump the version using `bumpversion <major|minor|patch>`.
+- Bump the version using `bumpversion <major|minor|patch>`. Versioning follows the [Semantic Versioning][semver] scheme.
 - Create a PR into `develop` and I'll merge your work in.
 
 [readwise]: https://readwise.io
@@ -37,6 +37,7 @@ needs to be completed manually.
 [readwise_api_key]: https://readwise.io/access_token
 [openai_api_key]: https://beta.openai.com/account/api-keys
 [anki_addons_folder]: https://addon-docs.ankiweb.net/addon-folders.html
+[semver]: https://semver.org/
 
 [git-flow-instructions]: https://nvie.com/posts/a-successful-git-branching-model/
 [git-flow-tool]: https://github.com/nvie/gitflow/tree/master
