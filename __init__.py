@@ -22,6 +22,10 @@ sys.path.append(ADDON_ROOT_DIR)
 import openai  # noqa: E402
 
 from .readwise import ReadwiseClient
+from .logging_utils import make_logger
+
+LOG_FILE = os.path.join(ADDON_ROOT_DIR, f"{__name__}.log")
+logger = make_logger(__name__, filepath=LOG_FILE)
 
 config = mw.addonManager.getConfig(__name__)
 OPENAI_API_KEY = config["openai_api_key"]
@@ -115,14 +119,14 @@ def do_sync():
                     note["Back"] = answer
                     # TODO: Use a single CollectionOp to create notes instead of multiple
                     add_note(parent=mw, note=note, target_deck_id=deck_id.id).run_in_background()
-            for doc in docs:
+            for doc in docs[:1]:
                 query_for_ai_flashcards(doc).success(update_card).run_in_background()
         # TODO: Make the deck have a certain template
         add_deck(parent=mw, name=DECK_NAME).success(generate_flashcards).run_in_background()
     sync_readwise().success(make_deck).run_in_background()
 
 def get_filtered_readwise_highlights():
-    readwise_client = ReadwiseClient(api_key=READWISE_API_KEY)
+    readwise_client = ReadwiseClient(api_key=READWISE_API_KEY).set_parent_logger(logger)
     docs = readwise_client.export()
     sources_to_ignore = {
         # Things that we didn't highlight. Readwise adds
