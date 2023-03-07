@@ -1,10 +1,11 @@
 import anki
+from anki.collection import Collection
 
 # import the main window object (mw) from aqt
 from aqt import mw, gui_hooks
 # import the "show info" tool from utils.py
 from aqt.utils import showInfo, qconnect
-from aqt.operations import QueryOp
+from aqt.operations import CollectionOp
 # import all of the Qt GUI library
 from aqt.qt import *
 
@@ -60,70 +61,43 @@ def get_ai_flashcards_for_doc(doc):
     responses = [complete(prompt_template.format(h.text)) for h in doc.highlights]
     return responses
 
-def query_for_ai_flashcards(doc):
-    return MyQueryOp(
-        parent=mw,
-        op=lambda col: (doc, get_ai_flashcards_for_doc(doc)),
-    )
-
-def identity_function(*args):
-    return args
-
-class MyQueryOp:
-    def __init__(self, parent, op):
-        self._parent = parent
-        self._op = op
-        self._success = identity_function
-
-    def op(self):
-        return QueryOp(parent=self._parent, op=self._op, success=self._success)
-    
-    def success(self, success):
-        self._success = success
-        return self
-    
-    def run_in_background(self):
-        self.op().run_in_background()
-
-def sync_readwise() -> None:
-    return MyQueryOp(
-        parent=mw,
-        op=lambda col: get_filtered_readwise_highlights(),
-    )
 
 def make_flashcard(doc, highlight, openai_response):
     pass
 
 def do_sync():
-    # TODO: Use promises instead of callbacks
-    def make_deck(docs):
-        from aqt.operations.deck import add_deck
-        # TODO: Only add a deck if the cards don't already exist
-        def generate_flashcards(deck_id):
-            def update_card(result):
-                from aqt.operations.note import add_note
-                # TODO: Create a function that accepts a deck_id, looks for card ids, etc...
-                # TODO: Search how to create a note
-                # docs: list[list[openai_response]] (one for each highlight)
-                # Add a note with docs[0][0].choices[0].text
-                #note = None
-                #add_note(parent=mw, note=note, target_deck_id=deck_id)
-                doc, completions = result
-                completions = [c.choices[0].text.strip() for c in completions]
-                for hl, completion in zip(doc.highlights, completions):
-                    question, answer = completion.split("A:")
-                    question = question[len("Q: "):]
-                    model = mw.col.models.by_name("Basic")
-                    note = mw.col.new_note(model)
-                    note["Front"] = question
-                    note["Back"] = answer
-                    # TODO: Use a single CollectionOp to create notes instead of multiple
-                    add_note(parent=mw, note=note, target_deck_id=deck_id.id).run_in_background()
-            for doc in docs[:1]:
-                query_for_ai_flashcards(doc).success(update_card).run_in_background()
+    def op(col: Collection):
+        want_cancel = False
+        def update_progress(label, value=None, max=None):
+            def cb():
+                mw.progress.update(label=label, value=value, max=max)
+                nonlocal want_cancel
+                want_cancel = mw.progress.want_cancel()
+            mw.taskman.run_on_main(cb)
+
+        undo = col.add_custom_undo_entry("Sync Readwise")
+        docs  = get_filtered_readwise_highlights()
         # TODO: Make the deck have a certain template
-        add_deck(parent=mw, name=DECK_NAME).success(generate_flashcards).run_in_background()
-    sync_readwise().success(make_deck).run_in_background()
+        deck_id = col.decks.add_normal_deck_with_name(DECK_NAME).id
+        for i, doc in enumerate(docs[:1], start=1):
+            if want_cancel:
+                break
+            update_progress(f"Processing document {i} out of {len(docs)}...", value=i-1, max=len(docs))
+            completions = get_ai_flashcards_for_doc(doc)
+            completions = [c.choices[0].text.strip() for c in completions]
+            for hl, completion in zip(doc.highlights, completions):
+                question, answer = completion.split("A:")
+                question = question[len("Q: "):]
+                model = mw.col.models.by_name("Basic")
+                note = mw.col.new_note(model)
+                note["Front"] = question
+                note["Back"] = answer
+                col.add_note(note=note, deck_id=deck_id)
+        # NOTE: the undo queue is limited to 30, so we can't merge more than that
+        # maybe an add_notes() op should be added to Anki
+        return col.merge_undo_entries(undo)
+
+    CollectionOp(parent=mw, op=op).run_in_background()
 
 def get_filtered_readwise_highlights():
     readwise_client = ReadwiseClient(api_key=READWISE_API_KEY).set_parent_logger(logger)
