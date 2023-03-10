@@ -38,6 +38,7 @@ class SmoothBrainNotetype:
         "author",
         "source",
         "source_url",
+        "category",
         "asin",
     ]
 
@@ -100,6 +101,7 @@ class SmoothBrainNotetype:
         note["author"] = self._format_field(doc.author)
         note["source"] = self._format_field(doc.source)
         note["source_url"] = self._format_url(doc.source_url)
+        note["category"] = self._format_field(doc.category)
         note["asin"] = self._format_field(doc.asin)
         note.tags = [tag["name"] for tag in doc.book_tags + highlight.tags]
 
