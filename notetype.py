@@ -32,12 +32,22 @@ class SmoothBrainNotetype:
         "highlighted_at",
         "created_at",
         "updated_at",
+        "location",
+        "end_location",
+        "color",
+        "is_favorite",
+        "is_discard",
         # Document fields
-        "book_id",
+        "user_book_id",
+        "readable_title",
         "title",
+        "document_note",
+        "document_readwise_url",
         "author",
         "source",
         "source_url",
+        "unique_url",
+        "cover_image_url",
         "category",
         "asin",
     ]
@@ -79,6 +89,12 @@ class SmoothBrainNotetype:
             url = f'<a href="{url}">{url}</a>'
         return url
 
+    def _format_image(self, contents) -> str:
+        url = self._format_field(contents)
+        if url:
+            url = f'<img src="{url}">'
+        return url
+
     def new_note(
         self, doc: ReadwiseDocument, highlight: ReadwiseHighlight, completion: str
     ) -> Note:
@@ -96,11 +112,21 @@ class SmoothBrainNotetype:
         note["highlighted_at"] = self._format_field(highlight.highlighted_at)
         note["created_at"] = self._format_field(highlight.created_at)
         note["updated_at"] = self._format_field(highlight.updated_at)
-        note["book_id"] = self._format_field(doc.user_book_id)
-        note["title"] = self._format_field(doc.readable_title)
+        note["location"] = self._format_field(highlight.location)
+        note["end_location"] = self._format_field(highlight.end_location)
+        note["color"] = self._format_field(highlight.color)
+        note["is_favorite"] = self._format_field(highlight.is_favorite)
+        note["is_discard"] = self._format_field(highlight.is_discard)
+        note["user_book_id"] = self._format_field(doc.user_book_id)
+        note["readable_title"] = self._format_field(doc.readable_title)
+        note["title"] = self._format_field(doc.title)
+        note["document_note"] = self._format_field(doc.document_note)
+        note["document_readwise_url"] = self._format_url(doc.readwise_url)
         note["author"] = self._format_field(doc.author)
         note["source"] = self._format_field(doc.source)
         note["source_url"] = self._format_url(doc.source_url)
+        note["unique_url"] = self._format_url(doc.unique_url)
+        note["cover_image_url"] = self._format_image(doc.cover_image_url)
         note["category"] = self._format_field(doc.category)
         note["asin"] = self._format_field(doc.asin)
         note.tags = [tag["name"] for tag in doc.book_tags + highlight.tags]
