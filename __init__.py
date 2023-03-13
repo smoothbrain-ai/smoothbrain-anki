@@ -89,6 +89,12 @@ def do_sync():
             completions = [c.choices[0].text.strip() for c in completions]
             for hl, completion in zip(doc.highlights, completions):
                 note = notetype.new_note(doc, hl, completion)
+                question, answer = completion.split("A:")
+                question = question[len("Q: "):]
+                model = mw.col.models.by_name("Basic")
+                note = mw.col.new_note(model)
+                note["Front"] = question
+                note["Back"] = answer
                 col.add_note(note=note, deck_id=deck_id)
         # NOTE: the undo queue is limited to 30, so we can't merge more than that
         # maybe an add_notes() op should be added to Anki
