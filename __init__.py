@@ -75,7 +75,7 @@ def do_sync():
                 want_cancel = mw.progress.want_cancel()
             mw.taskman.run_on_main(cb)
 
-        undo = col.add_custom_undo_entry("Sync Readwise")
+        undo_entry = col.add_custom_undo_entry("Sync Readwise")
         docs  = get_filtered_readwise_highlights()
         # TODO: Make the deck have a certain template
         deck_id = col.decks.add_normal_deck_with_name(DECK_NAME).id
@@ -93,9 +93,10 @@ def do_sync():
                 note["Front"] = question
                 note["Back"] = answer
                 col.add_note(note=note, deck_id=deck_id)
-        # NOTE: the undo queue is limited to 30, so we can't merge more than that
-        # maybe an add_notes() op should be added to Anki
-        return col.merge_undo_entries(undo)
+                # Merge to our custom undo entry before the undo queue fills up and Anki discards our entry
+                if (col.undo_status().last_step - undo_entry) % 29 == 0:
+                    col.merge_undo_entries(undo_entry)
+        return col.merge_undo_entries(undo_entry)
 
     CollectionOp(parent=mw, op=op).run_in_background()
 
