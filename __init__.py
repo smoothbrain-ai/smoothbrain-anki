@@ -24,6 +24,7 @@ import openai  # noqa: E402
 
 from .readwise import ReadwiseClient
 from .logging_utils import make_logger
+from .notetype import SmoothBrainNotetype
 
 LOG_FILE = os.path.join(ADDON_ROOT_DIR, f"{__name__}.log")
 logger = make_logger(__name__, filepath=LOG_FILE)
@@ -67,6 +68,7 @@ def make_flashcard(doc, highlight, openai_response):
 
 def do_sync():
     def op(col: Collection):
+        notetype = SmoothBrainNotetype(col)
         want_cancel = False
         def update_progress(label, value=None, max=None):
             def cb():
@@ -86,6 +88,7 @@ def do_sync():
             completions = get_ai_flashcards_for_doc(doc)
             completions = [c.choices[0].text.strip() for c in completions]
             for hl, completion in zip(doc.highlights, completions):
+                note = notetype.new_note(doc, hl, completion)
                 question, answer = completion.split("A:")
                 question = question[len("Q: "):]
                 model = mw.col.models.by_name("Basic")
