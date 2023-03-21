@@ -1,6 +1,5 @@
 import datetime
-from queue import Queue
-from threading import Event, Thread
+import concurrent
 import anki
 from anki.collection import Collection
 
@@ -66,31 +65,6 @@ def get_ai_flashcards_for_highlight(highlight):
     return complete(prompt_template.format(highlight.text))
 
 
-def qa_generation_worker(queue: Queue, enqueued_all_notes: Event, total_highlights: int):
-    want_cancel = False
-    def update_progress(label, value=None, max=None):
-        def cb():
-            if enqueued_all_notes.is_set():
-                mw.progress.update(label=label, value=value, max=max)
-            nonlocal want_cancel
-            want_cancel = mw.progress.want_cancel()
-
-        mw.taskman.run_on_main(cb)
-
-    i = 1
-    while queue.qsize() != 0 or not enqueued_all_notes.is_set():
-        if want_cancel:
-            break
-        hl, note = queue.get()
-        update_progress(f"Generating question {i} out of {total_highlights}", value=i, max=total_highlights)
-        completion = get_ai_flashcards_for_highlight(hl).choices[0].text.strip()
-        question, answer = completion.split("A:")
-        question = question[len("Q: ") :]
-        note["question"] = question
-        note["answer"] = answer
-        queue.task_done()
-        i += 1
-
 def make_flashcard(doc, highlight, openai_response):
     pass
 
@@ -107,22 +81,11 @@ def do_sync():
 
         undo_entry = col.add_custom_undo_entry("Sync Readwise")
         docs = get_filtered_readwise_highlights()
-        total_highlights = sum(len(doc.highlights) for doc in docs)
         # TODO: Make the deck have a certain template
         deck_id = col.decks.add_normal_deck_with_name(DECK_NAME).id
         notes = []
-
-        gen_queue = Queue(maxsize=total_highlights)
-        enqueued_all_notes = Event()
-        Thread(
-            target=qa_generation_worker,
-            daemon=True,
-            args=(
-                gen_queue,
-                enqueued_all_notes,
-                total_highlights,
-            ),
-        ).start()
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=4)
+        future_to_note = {}
         for i, doc in enumerate(docs[:1], start=1):
             if want_cancel:
                 break
@@ -131,7 +94,8 @@ def do_sync():
                 note, added = notetype.get_or_create(doc, hl)
                 notes.append(note)
                 if added:
-                    gen_queue.put((hl, note))
+                    future = executor.submit(lambda h: get_ai_flashcards_for_highlight(h).choices[0].text.strip(), hl)
+                    future_to_note[future] = note
                     # model = mw.col.models.by_name("Basic")
                     # note = mw.col.new_note(model)
                     # note["Front"] = question
@@ -140,8 +104,17 @@ def do_sync():
                 # Merge to our custom undo entry before the undo queue fills up and Anki discards our entry
                 if (col.undo_status().last_step - undo_entry) % 29 == 0:
                     col.merge_undo_entries(undo_entry)
-        enqueued_all_notes.set()
-        gen_queue.join()
+        for i, future in enumerate(concurrent.futures.as_completed(future_to_note), start=1):
+            if want_cancel:
+                break
+            update_progress(f"Generating question {i} out of {len(future_to_note.keys())}...", value=i-1, max=len(future_to_note.keys()))
+            note = future_to_note[future]
+            completion = future.result()
+            question, answer = completion.split("A:")
+            question = question[len("Q: ") :]
+            note["question"] = question
+            note["answer"] = answer
+
         col.update_notes(notes)
         return col.merge_undo_entries(undo_entry)
 
