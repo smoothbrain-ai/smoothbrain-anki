@@ -1,4 +1,6 @@
-from anki.collection import Collection
+from typing import Tuple
+
+from anki.collection import Collection, SearchNode
 from anki.models import NotetypeDict
 from anki.notes import Note
 from anki.stdmodels import get_stock_notetypes
@@ -95,16 +97,16 @@ class SmoothBrainNotetype:
             url = f'<img src="{url}">'
         return url
 
-    def new_note(
-        self, doc: ReadwiseDocument, highlight: ReadwiseHighlight, completion: str
-    ) -> Note:
-        note = self.col.new_note(self.notetype)
-        question, answer = completion.split("A:")
-        question = question[len("Q: ") :]
-        note = self.col.new_note(self.notetype)
+    def get_or_create(self, doc: ReadwiseDocument, highlight: ReadwiseHighlight) -> Tuple[Note, bool]:
+        nids = self.col.find_notes(self.col.build_search_string(SearchNode(note=self.name), f'"id:{highlight.id}"'))
+        if nids:
+            note = self.col.get_note(nids[0])
+            added = False
+        else:
+            note = self.col.new_note(self.notetype)
+            added = True
+
         note["id"] = self._format_field(highlight.id)
-        note["question"] = self._format_field(question)
-        note["answer"] = self._format_field(answer)
         note["text"] = markdown(self._format_field(highlight.text))
         note["note"] = self._format_field(highlight.note)
         note["url"] = self._format_url(highlight.url)
@@ -131,4 +133,4 @@ class SmoothBrainNotetype:
         note["asin"] = self._format_field(doc.asin)
         note.tags = [tag["name"] for tag in doc.book_tags + highlight.tags]
 
-        return note
+        return note, added
