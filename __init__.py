@@ -1,3 +1,4 @@
+import datetime
 import anki
 from anki.collection import Collection
 
@@ -25,11 +26,12 @@ import openai  # noqa: E402
 from .readwise import ReadwiseClient
 from .logging_utils import make_logger
 from .notetype import SmoothBrainNotetype
+from .config import Config
 
 LOG_FILE = os.path.join(ADDON_ROOT_DIR, f"{__name__}.log")
 logger = make_logger(__name__, filepath=LOG_FILE)
 
-config = mw.addonManager.getConfig(__name__)
+config = Config(mw.addonManager)
 OPENAI_API_KEY = config["openai_api_key"]
 READWISE_API_KEY = config["readwise_api_key"]
 DECK_NAME = config["deck_name"]
@@ -104,8 +106,10 @@ def do_sync():
     CollectionOp(parent=mw, op=op).run_in_background()
 
 def get_filtered_readwise_highlights():
-    readwise_client = ReadwiseClient(api_key=READWISE_API_KEY).set_parent_logger(logger)
-    docs = readwise_client.export()
+    latest_fetch_time = datetime.datetime.fromisoformat(config["latest_fetch_time"]) if config["latest_fetch_time"] else None
+    readwise_client = ReadwiseClient(api_key=READWISE_API_KEY, latest_fetch_time=latest_fetch_time).set_parent_logger(logger)
+    docs = readwise_client.updates()
+    config["latest_fetch_time"] = datetime.datetime.isoformat(readwise_client.latest_fetch_time)
     sources_to_ignore = {
         # Things that we didn't highlight. Readwise adds
         # supplemental popular highlights from things we've read,

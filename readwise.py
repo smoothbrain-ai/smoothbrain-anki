@@ -51,11 +51,11 @@ class ReadwiseDocument:
 
 
 class ReadwiseClient:
-    def __init__(self, api_key: str=None):
+    def __init__(self, api_key: str=None, latest_fetch_time=None):
         self._base_url = f"https://readwise.io/api/v2"
         self._parent_logger = None
         self._logger = logging.getLogger(MODULE_NAME)
-        self.latest_fetch_time = None
+        self.latest_fetch_time = latest_fetch_time
         self.set_api_key(api_key)
 
     def set_parent_logger(self, parent_logger):
