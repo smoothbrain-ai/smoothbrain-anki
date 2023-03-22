@@ -1,3 +1,4 @@
+import datetime
 import anki
 from anki.collection import Collection
 
@@ -25,11 +26,12 @@ import openai  # noqa: E402
 from .readwise import ReadwiseClient
 from .logging_utils import make_logger
 from .notetype import SmoothBrainNotetype
+from .config import Config
 
 LOG_FILE = os.path.join(ADDON_ROOT_DIR, f"{__name__}.log")
 logger = make_logger(__name__, filepath=LOG_FILE)
 
-config = mw.addonManager.getConfig(__name__)
+config = Config(mw.addonManager)
 OPENAI_API_KEY = config["openai_api_key"]
 READWISE_API_KEY = config["readwise_api_key"]
 DECK_NAME = config["deck_name"]
@@ -43,7 +45,7 @@ openai.api_base = config.get("openai_base_url", "https://oai.hconeai.com/v1")  #
 
 # We're going to add a menu item below. First we want to create a function to
 # be called when the menu item is activated.
-def get_ai_flashcards_for_doc(doc):
+def get_ai_flashcards_for_highlight(highlight):
     # TODO: give pos/neg examples of what it gives me but what I actually want
     # TODO: Try using Curie / Davinci with fine-tuning
     # TODO: Handle list/composite highlights
@@ -59,9 +61,7 @@ def get_ai_flashcards_for_doc(doc):
     2. Only test ONE fact.
     3. Prefer Q&A format.
     """
-    responses = [complete(prompt_template.format(h.text)) for h in doc.highlights]
-    return responses
-
+    return complete(prompt_template.format(highlight.text))
 
 def make_flashcard(doc, highlight, openai_response):
     pass
@@ -81,31 +81,39 @@ def do_sync():
         docs  = get_filtered_readwise_highlights()
         # TODO: Make the deck have a certain template
         deck_id = col.decks.add_normal_deck_with_name(DECK_NAME).id
+        updated_notes = []
         for i, doc in enumerate(docs[:1], start=1):
             if want_cancel:
                 break
             update_progress(f"Processing document {i} out of {len(docs)}...", value=i-1, max=len(docs))
-            completions = get_ai_flashcards_for_doc(doc)
-            completions = [c.choices[0].text.strip() for c in completions]
-            for hl, completion in zip(doc.highlights, completions):
-                note = notetype.new_note(doc, hl, completion)
-                question, answer = completion.split("A:")
-                question = question[len("Q: "):]
-                model = mw.col.models.by_name("Basic")
-                note = mw.col.new_note(model)
-                note["Front"] = question
-                note["Back"] = answer
-                col.add_note(note=note, deck_id=deck_id)
+            for hl in doc.highlights:
+                note, added = notetype.get_or_create(doc, hl)
+                if added:
+                    completion = get_ai_flashcards_for_highlight(hl).choices[0].text.strip()
+                    question, answer = completion.split("A:")
+                    question = question[len("Q: "):]
+                    note["question"] = question
+                    note["answer"] = answer
+                    # model = mw.col.models.by_name("Basic")
+                    # note = mw.col.new_note(model)
+                    # note["Front"] = question
+                    # note["Back"] = answer
+                    col.add_note(note=note, deck_id=deck_id)
+                else:
+                    updated_notes.append(note)
                 # Merge to our custom undo entry before the undo queue fills up and Anki discards our entry
                 if (col.undo_status().last_step - undo_entry) % 29 == 0:
                     col.merge_undo_entries(undo_entry)
+        col.update_notes(updated_notes)
         return col.merge_undo_entries(undo_entry)
 
     CollectionOp(parent=mw, op=op).run_in_background()
 
 def get_filtered_readwise_highlights():
-    readwise_client = ReadwiseClient(api_key=READWISE_API_KEY).set_parent_logger(logger)
-    docs = readwise_client.export()
+    latest_fetch_time = datetime.datetime.fromisoformat(config["latest_fetch_time"]) if config["latest_fetch_time"] else None
+    readwise_client = ReadwiseClient(api_key=READWISE_API_KEY, latest_fetch_time=latest_fetch_time).set_parent_logger(logger)
+    docs = readwise_client.updates()
+    config["latest_fetch_time"] = datetime.datetime.isoformat(readwise_client.latest_fetch_time)
     sources_to_ignore = {
         # Things that we didn't highlight. Readwise adds
         # supplemental popular highlights from things we've read,
