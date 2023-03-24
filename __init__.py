@@ -34,15 +34,14 @@ LOG_FILE = os.path.join(ADDON_ROOT_DIR, f"{__name__}.log")
 logger = make_logger(__name__, filepath=LOG_FILE)
 
 config = Config(mw.addonManager)
-OPENAI_API_KEY = config["openai_api_key"]
-READWISE_API_KEY = config["readwise_api_key"]
-DECK_NAME = config["deck_name"]
 
 OPENAI_DEFAULT_MODEL = "text-davinci-003"
 OPENAI_MAX_TOKENS = 4096
 OPENAI_MAX_OUTPUT_TOKENS = 256
-openai.api_key = OPENAI_API_KEY
-openai.api_base = config.get("openai_base_url", "https://oai.hconeai.com/v1")  # Helicone for stats
+
+def set_openai_api_parameters(config):
+    openai.api_key = config["openai_api_key"]
+    openai.api_base = config.get("openai_api_base", openai.api_base)
 
 
 # We're going to add a menu item below. First we want to create a function to
@@ -83,12 +82,12 @@ def do_sync():
         undo_entry = col.add_custom_undo_entry("Sync Readwise")
         docs = get_filtered_readwise_highlights()
         # TODO: Make the deck have a certain template
-        deck_id = col.decks.add_normal_deck_with_name(DECK_NAME).id
+        deck_id = col.decks.add_normal_deck_with_name(config["deck_name"]).id
         notes = []
         executor = concurrent.futures.ThreadPoolExecutor(max_workers=4)
         future_to_note = {}
         try:
-            for i, doc in enumerate(docs[:1], start=1):
+            for i, doc in enumerate(docs, start=1):
                 if want_cancel:
                     break
                 update_progress(f"Processing document {i} out of {len(docs)}...", value=i-1, max=len(docs))
@@ -124,7 +123,7 @@ def do_sync():
 
 def get_filtered_readwise_highlights():
     latest_fetch_time = datetime.datetime.fromisoformat(config["latest_fetch_time"]) if config["latest_fetch_time"] else None
-    readwise_client = ReadwiseClient(api_key=READWISE_API_KEY, latest_fetch_time=latest_fetch_time).set_parent_logger(logger)
+    readwise_client = ReadwiseClient(api_key=config["readwise_api_key"], latest_fetch_time=latest_fetch_time).set_parent_logger(logger)
     docs = readwise_client.updates()
     config["latest_fetch_time"] = datetime.datetime.isoformat(readwise_client.latest_fetch_time)
     sources_to_ignore = {
@@ -160,6 +159,7 @@ def get_filtered_readwise_highlights():
 # TODO: Use backoff and/or rate-limit
 # TODO: Allow these parameters to be customized in advanced menu
 def complete(prompt):
+    set_openai_api_parameters(config)
     return openai.Completion.create(engine=OPENAI_DEFAULT_MODEL,
                                     prompt=prompt,
                                     max_tokens=OPENAI_MAX_OUTPUT_TOKENS,
