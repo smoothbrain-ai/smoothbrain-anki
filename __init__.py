@@ -1,4 +1,6 @@
 import datetime
+import concurrent
+import concurrent.futures
 import anki
 from anki.collection import Collection
 
@@ -63,6 +65,7 @@ def get_ai_flashcards_for_highlight(highlight):
     """
     return complete(prompt_template.format(highlight.text))
 
+
 def make_flashcard(doc, highlight, openai_response):
     pass
 
@@ -78,33 +81,43 @@ def do_sync():
             mw.taskman.run_on_main(cb)
 
         undo_entry = col.add_custom_undo_entry("Sync Readwise")
-        docs  = get_filtered_readwise_highlights()
+        docs = get_filtered_readwise_highlights()
         # TODO: Make the deck have a certain template
         deck_id = col.decks.add_normal_deck_with_name(DECK_NAME).id
-        updated_notes = []
-        for i, doc in enumerate(docs[:1], start=1):
-            if want_cancel:
-                break
-            update_progress(f"Processing document {i} out of {len(docs)}...", value=i-1, max=len(docs))
-            for hl in doc.highlights:
-                note, added = notetype.get_or_create(doc, hl)
-                if added:
-                    completion = get_ai_flashcards_for_highlight(hl).choices[0].text.strip()
-                    question, answer = completion.split("A:")
-                    question = question[len("Q: "):]
-                    note["question"] = question
-                    note["answer"] = answer
-                    # model = mw.col.models.by_name("Basic")
-                    # note = mw.col.new_note(model)
-                    # note["Front"] = question
-                    # note["Back"] = answer
-                    col.add_note(note=note, deck_id=deck_id)
-                else:
-                    updated_notes.append(note)
-                # Merge to our custom undo entry before the undo queue fills up and Anki discards our entry
-                if (col.undo_status().last_step - undo_entry) % 29 == 0:
-                    col.merge_undo_entries(undo_entry)
-        col.update_notes(updated_notes)
+        notes = []
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=4)
+        future_to_note = {}
+        try:
+            for i, doc in enumerate(docs[:1], start=1):
+                if want_cancel:
+                    break
+                update_progress(f"Processing document {i} out of {len(docs)}...", value=i-1, max=len(docs))
+                for hl in doc.highlights:
+                    note, added = notetype.get_or_create(doc, hl)
+                    notes.append(note)
+                    if added:
+                        future = executor.submit(lambda h: get_ai_flashcards_for_highlight(h).choices[0].text.strip(), hl)
+                        future_to_note[future] = note
+                        # model = mw.col.models.by_name("Basic")
+                        # note = mw.col.new_note(model)
+                        # note["Front"] = question
+                        # note["Back"] = answer
+                        col.add_note(note=note, deck_id=deck_id)
+                    # Merge to our custom undo entry before the undo queue fills up and Anki discards our entry
+                    if (col.undo_status().last_step - undo_entry) % 29 == 0:
+                        col.merge_undo_entries(undo_entry)
+            for i, future in enumerate(concurrent.futures.as_completed(future_to_note), start=1):
+                if want_cancel:
+                    break
+                update_progress(f"Generating question {i} out of {len(future_to_note.keys())}...", value=i-1, max=len(future_to_note.keys()))
+                note = future_to_note[future]
+                completion = future.result()
+                question, answer = completion.split("A:")
+                question = question[len("Q: ") :]
+                note["question"] = question
+                note["answer"] = answer
+        finally:
+            col.update_notes(notes)
         return col.merge_undo_entries(undo_entry)
 
     CollectionOp(parent=mw, op=op).run_in_background()
