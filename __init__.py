@@ -33,7 +33,7 @@ from .config import Config
 LOG_FILE = os.path.join(ADDON_ROOT_DIR, f"{__name__}.log")
 logger = make_logger(__name__, filepath=LOG_FILE)
 
-config = Config(mw.addonManager)
+config = Config(mw.addonManager, __name__)
 OPENAI_API_KEY = config["openai_api_key"]
 READWISE_API_KEY = config["readwise_api_key"]
 DECK_NAME = config["deck_name"]
