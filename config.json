@@ -1,7 +1,7 @@
 {
-  "deck_name": "Readwise Highlights",
-  "readwise_api_key": "",
-  "openai_api_key": "",
-  "openai_api_base": "https://api.openai.com/v1",
-  "latest_fetch_time": null
+    "deck_name": "Readwise Highlights",
+    "readwise_api_key": "",
+    "openai_api_key": "",
+    "openai_api_base": "https://api.openai.com/v1",
+    "latest_fetch_time": null,
 }

@@ -97,8 +97,14 @@ class SmoothBrainNotetype:
             url = f'<img src="{url}">'
         return url
 
-    def get_or_create(self, doc: ReadwiseDocument, highlight: ReadwiseHighlight) -> Tuple[Note, bool]:
-        nids = self.col.find_notes(self.col.build_search_string(SearchNode(note=self.name), f'"id:{highlight.id}"'))
+    def get_or_create(
+        self, doc: ReadwiseDocument, highlight: ReadwiseHighlight
+    ) -> Tuple[Note, bool]:
+        nids = self.col.find_notes(
+            self.col.build_search_string(
+                SearchNode(note=self.name), f'"id:{highlight.id}"'
+            )
+        )
         if nids:
             note = self.col.get_note(nids[0])
             added = False

@@ -7,7 +7,9 @@ class Config:
     def __init__(self, addon_manager: AddonManager, addon_name: str = __name__):
         self._addon_manager = addon_manager
         self._addon_name = addon_name
-        self._addon_manager.setConfigUpdatedAction(self._addon_name, self._config_updated_action)
+        self._addon_manager.setConfigUpdatedAction(
+            self._addon_name, self._config_updated_action
+        )
 
     def _config(self):
         return self._addon_manager.getConfig(self._addon_name)
