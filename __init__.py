@@ -202,11 +202,17 @@ def get_filtered_readwise_highlights():
     return filtered_highlights
 
 
-# TODO: Use backoff and/or rate-limit
-# TODO: Allow these parameters to be customized in advanced menu
-@log_exceptions(logger)
-def complete(prompt):
-    set_openai_api_parameters(config)
+def chat_complete(prompt):
+    completion = openai.ChatCompletion.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": prompt}],
+        headers={
+            "Helicone-Cache-Enabled": "true",
+        },
+    )
+    return completion
+
+def standard_complete(prompt):
     return openai.Completion.create(
         engine=OPENAI_DEFAULT_MODEL,
         prompt=prompt,
@@ -221,6 +227,14 @@ def complete(prompt):
             "Helicone-Cache-Enabled": "true",
         },
     )
+
+# TODO: Use backoff and/or rate-limit
+# TODO: Allow these parameters to be customized in advanced menu
+@log_exceptions(logger)
+def complete(prompt):
+    set_openai_api_parameters(config)
+    return chat_complete(prompt)
+    
 
 
 @log_exceptions(logger)
