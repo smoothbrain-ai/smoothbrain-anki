@@ -39,10 +39,7 @@ logger = make_logger(__name__, filepath=LOG_FILE)
 
 config = Config(mw.addonManager)
 
-OPENAI_DEFAULT_MODEL = "text-davinci-003"
-OPENAI_MAX_TOKENS = 4096
-OPENAI_MAX_OUTPUT_TOKENS = 256
-
+OPENAI_DEFAULT_MODEL = "gpt-3.5-turbo"
 
 def max_num_docs_to_fetch():
     return config.get("debug", dict()).get("max_num_docs_to_fetch", None)
@@ -59,25 +56,15 @@ def set_openai_api_parameters(config):
 
 # We're going to add a menu item below. First we want to create a function to
 # be called when the menu item is activated.
-def get_ai_flashcards_for_highlight(highlight):
+def get_ai_flashcards_for_highlight(highlight, model):
     # TODO: give pos/neg examples of what it gives me but what I actually want
     # TODO: Try using Curie / Davinci with fine-tuning
     # TODO: Handle list/composite highlights
     # TODO: Add retry logic, only surface error after a few tries with backoff
     # TODO: Let them be bad but let user re-gen it with a prompt. Save prompt
-    prompt_template = f"""
-    Make a succinct flash card for the following:
-    
-    {{}}
-
-    Return the answer as a JSON object with the keys "question" and "answer".
-    
-    Remember to:
-    1. Be straight to the point.
-    2. Only test ONE fact.
-    3. Prefer Q&A format.
-    """
-    return complete(prompt_template.format(highlight.text))
+    # TODO: Add support for multiple questions per highlight.
+    # TODO: Try few-shot prompt
+    return complete(highlight, model)
 
 
 def do_sync():
@@ -119,7 +106,7 @@ def do_sync():
                     notes.append(note)
                     if added:
                         future = executor.submit(
-                            lambda h: get_ai_flashcards_for_highlight(h)
+                            lambda h: get_ai_flashcards_for_highlight(h.text, config.get("openai_model", OPENAI_DEFAULT_MODEL))
                             .choices[0]["message"]["content"]
                             .strip(),
                             hl,
@@ -140,12 +127,20 @@ def do_sync():
                     value=i - 1,
                     max=len(future_to_note.keys()),
                 )
-                note = future_to_note[future]
                 completion = future.result()
-                result = json.loads(completion)
                 try:
-                    note["question"] = result["question"]
-                    note["answer"] = result["answer"]
+                    result = json.loads(completion)
+                    if not result:
+                        continue
+                    note = future_to_note[future]
+                    # TODO: Use all of the responses, and don't add a card if it doesn't have a flashcard.
+                    note["question"] = result[0]["question"]
+                    note["answer"] = result[0]["answer"]
+                except json.decoder.JSONDecodeError as e:
+                    logger.error(
+                        f"Failed to parse completion as JSON. Completion: {completion}"
+                    )
+                    raise e
                 except ValueError as e:
                     logger.error(
                         f"Failed to split completion into question and answer. Result: {result}"
@@ -204,10 +199,42 @@ def get_filtered_readwise_highlights():
     return filtered_highlights
 
 
-def chat_complete(prompt):
+def chat_complete(prompt, model):
+    system = """
+    You are the worlds best flashcard making machine, ushering in a new age of education.
+
+You extract the most interesting fact triples from the input, then return a JSON list of objects which have a "question" field and an "answer" field. If input is missing information or has no interesting facts worth remembering, return an empty list.
+
+Good examples:
+Input: Guido Van Rossum invented Python in 1989.
+Output: [{"question": "Who invented Python?", "answer": "Guido Van Rossum"}, {"question": "Which year was Python invented?", "1989"}]
+
+Examples of no good facts:
+The following example returns an empty result because even though the mass of Jupiter is interesting, we don't know what "The seminar":
+Input: The seminar covered the mass of Jupiter
+Output: []
+
+The following is an incorrect fact, so no question is returned:
+Input: The mass of Jupiter is 1kg
+Output: []
+
+The following is an example of an opinion:
+Input: Python is the best programming language.
+Output: []
+
+Here is an example of an input with no useful facts:
+Input: Our models are used for both research purposes and developer use cases in production. Researchers often learn about our models from papers that we have published, but there is often not a perfect match between what is available in the OpenAI API and what is published in a paper.
+Output: []
+
+Here are some examples of bad outputs, don't do these:
+The following is bad because the question doesnt give context of what sort of answer it is expecting, and it could be multiple answers:
+Input: `text-davinci-002` is an InstructGPT model based on `code-davinci-002`
+Output: [{"question": "What is `text-davinci-002`?", "answer": "An InstructGPT model"}]
+"""
     completion = openai.ChatCompletion.create(
-        model="gpt-4",
-        messages=[{"role": "user", "content": prompt}],
+        model=model,
+        messages=[{"role": "system", "content": system},
+                  {"role": "user", "content": prompt}],
         headers={
             "Helicone-Cache-Enabled": "true",
         },
@@ -215,29 +242,12 @@ def chat_complete(prompt):
     return completion
 
 
-def standard_complete(prompt):
-    return openai.Completion.create(
-        engine=OPENAI_DEFAULT_MODEL,
-        prompt=prompt,
-        max_tokens=OPENAI_MAX_OUTPUT_TOKENS,
-        temperature=0.5,
-        top_p=1,
-        frequency_penalty=0,
-        presence_penalty=0,
-        # If we use Helicone we can speed up repeat runs during development.
-        # Will be ignored if using OpenAI directly.
-        headers={
-            "Helicone-Cache-Enabled": "true",
-        },
-    )
-
-
 # TODO: Use backoff and/or rate-limit
 # TODO: Allow these parameters to be customized in advanced menu
 @log_exceptions(logger)
-def complete(prompt):
+def complete(prompt, model):
     set_openai_api_parameters(config)
-    return chat_complete(prompt)
+    return chat_complete(prompt, model)
 
 
 @log_exceptions(logger)
