@@ -47,23 +47,9 @@ def set_openai_api_parameters(config):
     openai.api_base = config.get("openai_api_base", openai.api_base)
 
 
-# We're going to add a menu item below. First we want to create a function to
-# be called when the menu item is activated.
-def get_ai_flashcards_for_highlight(highlight, model):
-    # TODO: give pos/neg examples of what it gives me but what I actually want
-    # TODO: Try using Curie / Davinci with fine-tuning
-    # TODO: Handle list/composite highlights
-    # TODO: Add retry logic, only surface error after a few tries with backoff
-    # TODO: Let them be bad but let user re-gen it with a prompt. Save prompt
-    # TODO: Add support for multiple questions per highlight.
-    # TODO: Try few-shot prompt
-    return complete(highlight, model)
-
-
 def do_sync():
     @log_exceptions(logger)
     def op(col: Collection):
-        # TODO: Don't add partial questions
         # TODO: Get latest fetch time from deck instead of config (what if we delete the deck?)
         # TODO: Remove duplicate or VERY similar cards even if from different highlights
         notetype = SmoothBrainNotetype(col)
@@ -85,6 +71,9 @@ def do_sync():
             else docs
         )
 
+        # TODO: Wait until flashcards are generated before adding them to the deck.
+        # Should probably use an SQLite database to store partial results so they don't
+        # pollute the Anki database.
         deck_id = col.decks.add_normal_deck_with_name(config["deck_name"]).id
         notes = []
         executor = concurrent.futures.ThreadPoolExecutor(max_workers=4)
@@ -94,7 +83,7 @@ def do_sync():
                 if want_cancel:
                     break
                 update_progress(
-                    f"Fetching Readwise document {i} out of {len(docs)}...",
+                    f"Fetching Readwise document {i} of {len(docs)}...",
                     value=i - 1,
                     max=len(docs),
                 )
@@ -103,7 +92,7 @@ def do_sync():
                     notes.append(note)
                     if added:
                         future = executor.submit(
-                            lambda h: get_ai_flashcards_for_highlight(
+                            lambda h: complete(
                                 h.text, config.get("openai_model", OPENAI_DEFAULT_MODEL)
                             )
                             .choices[0]["message"]["content"]
@@ -122,7 +111,7 @@ def do_sync():
                 if want_cancel:
                     break
                 update_progress(
-                    f"Generating questions for highlight {i} out of {len(future_to_note.keys())}...",
+                    f"Generating questions for highlight {i} of {len(future_to_note.keys())}...",
                     value=i - 1,
                     max=len(future_to_note.keys()),
                 )
@@ -199,7 +188,12 @@ def get_filtered_readwise_highlights():
     return filtered_highlights
 
 
-def chat_complete(prompt, model):
+# TODO: Use backoff and/or rate-limit.
+# TODO: Ask GPT to add a reason if there are no questions, for debugging.
+# TODO: Generate questions for entire doc, and fetch the entire doc if possible to improve the context
+@log_exceptions(logger)
+def complete(prompt, model):
+    set_openai_api_parameters(config)
     system = """
     You are the worlds best flashcard making machine, ushering in a new age of education.
 
@@ -237,6 +231,7 @@ Output: [{"question": "What is `text-davinci-002`?", "answer": "An InstructGPT m
             {"role": "system", "content": system},
             {"role": "user", "content": prompt},
         ],
+        # TODO: Allow these parameters to be customized in config
         temperature=0,
         n=1,
         headers={
@@ -244,14 +239,6 @@ Output: [{"question": "What is `text-davinci-002`?", "answer": "An InstructGPT m
         },
     )
     return completion
-
-
-# TODO: Use backoff and/or rate-limit
-# TODO: Allow these parameters to be customized in advanced menu
-@log_exceptions(logger)
-def complete(prompt, model):
-    set_openai_api_parameters(config)
-    return chat_complete(prompt, model)
 
 
 @log_exceptions(logger)
