@@ -150,9 +150,11 @@ def get_filtered_readwise_highlights():
         if config["latest_fetch_time"]
         else None
     )
-    readwise_client = ReadwiseClient(
-        api_key=config["readwise_api_key"], latest_fetch_time=latest_fetch_time
-    ).set_parent_logger(logger)
+    readwise_client = (
+        ReadwiseClient(api_key=config["readwise_api_key"])
+        .set_parent_logger(logger)
+        .set_latest_fetch_time(latest_fetch_time)
+    )
     docs = readwise_client.updates()
     config["latest_fetch_time"] = datetime.datetime.isoformat(
         readwise_client.latest_fetch_time

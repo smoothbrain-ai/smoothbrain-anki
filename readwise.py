@@ -56,7 +56,7 @@ class ReadwiseClient:
         self._base_url = f"https://readwise.io/api/v2"
         self._parent_logger = None
         self._logger = logging.getLogger(MODULE_NAME)
-        self.latest_fetch_time = None
+        self._latest_fetch_time = None
         self.set_api_key(api_key)
 
     def set_parent_logger(self, parent_logger):
@@ -64,12 +64,20 @@ class ReadwiseClient:
         self._logger = self._parent_logger.getChild(MODULE_NAME)
         return self
 
+    def set_latest_fetch_time(self, latest_fetch_time):
+        self._latest_fetch_time = latest_fetch_time
+        return self
+
+    @property
+    def latest_fetch_time(self):
+        return self._latest_fetch_time
+
     def set_api_key(self, api_key):
         self._api_key = api_key
         return self
 
     def _update_time(self):
-        self.latest_fetch_time = datetime.datetime.now()
+        self._latest_fetch_time = datetime.datetime.now()
 
     # Taken from https://readwise.io/api_deets
     def export(self, updated_after=None):
