@@ -1,4 +1,5 @@
 import datetime
+import json
 import concurrent
 import concurrent.futures
 import anki
@@ -68,6 +69,8 @@ def get_ai_flashcards_for_highlight(highlight):
     Make a succinct flash card for the following:
     
     {{}}
+
+    Return the answer as a JSON object with the keys "question" and "answer".
     
     Remember to:
     1. Be straight to the point.
@@ -117,8 +120,8 @@ def do_sync():
                     if added:
                         future = executor.submit(
                             lambda h: get_ai_flashcards_for_highlight(h)
-                            .choices[0]
-                            .text.strip(),
+                            .choices[0]["message"]["content"]
+                            .strip(),
                             hl,
                         )
                         future_to_note[future] = note
@@ -139,16 +142,15 @@ def do_sync():
                 )
                 note = future_to_note[future]
                 completion = future.result()
-                result = completion.split("A:")
-                question, answer = result
-                question = question[len("Q: ") :]
-                note["question"] = question
-                note["answer"] = answer
-                # except ValueError as e:
-                #    logger.error(
-                #        f"Failed to split completion into question and answer. Result: {result}"
-                #    )
-                #    raise e
+                result = json.loads(completion)
+                try:
+                    note["question"] = result["question"]
+                    note["answer"] = result["answer"]
+                except ValueError as e:
+                    logger.error(
+                        f"Failed to split completion into question and answer. Result: {result}"
+                    )
+                    raise e
         finally:
             col.update_notes(notes)
         return col.merge_undo_entries(undo_entry)
@@ -212,6 +214,7 @@ def chat_complete(prompt):
     )
     return completion
 
+
 def standard_complete(prompt):
     return openai.Completion.create(
         engine=OPENAI_DEFAULT_MODEL,
@@ -228,13 +231,13 @@ def standard_complete(prompt):
         },
     )
 
+
 # TODO: Use backoff and/or rate-limit
 # TODO: Allow these parameters to be customized in advanced menu
 @log_exceptions(logger)
 def complete(prompt):
     set_openai_api_parameters(config)
     return chat_complete(prompt)
-    
 
 
 @log_exceptions(logger)
