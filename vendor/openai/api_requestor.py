@@ -96,8 +96,10 @@ def parse_stream_helper(line: bytes) -> Optional[str]:
             # and it will close http connection with TCP Reset
             return None
         if line.startswith(b"data: "):
-            line = line[len(b"data: ") :]
-        return line.decode("utf-8")
+            line = line[len(b"data: "):]
+            return line.decode("utf-8")
+        else:
+            return None
     return None
 
 
@@ -109,13 +111,10 @@ def parse_stream(rbody: Iterator[bytes]) -> Iterator[str]:
 
 
 async def parse_stream_async(rbody: aiohttp.StreamReader):
-    async for chunk, _ in rbody.iter_chunks():
-        # While the `ChunkTupleAsyncStreamIterator` iterator is meant to iterate over chunks (and thus lines) it seems
-        # to still sometimes return multiple lines at a time, so let's split the chunk by lines again.
-        for line in chunk.splitlines():
-            _line = parse_stream_helper(line)
-            if _line is not None:
-                yield _line
+    async for line in rbody:
+        _line = parse_stream_helper(line)
+        if _line is not None:
+            yield _line
 
 
 class APIRequestor:
@@ -477,8 +476,8 @@ class APIRequestor:
                 abs_url = _build_api_url(abs_url, encoded_params)
         elif method in {"post", "put"}:
             if params and files:
-                raise ValueError("At most one of params and files may be specified.")
-            if params:
+                data = params
+            if params and not files:
                 data = json.dumps(params).encode()
                 headers["Content-Type"] = "application/json"
         else:
@@ -667,7 +666,10 @@ class APIRequestor:
                 headers=rheaders,
             )
         try:
-            data = json.loads(rbody)
+            if 'text/plain' in rheaders.get('Content-Type'):
+                data = rbody
+            else:
+                data = json.loads(rbody)
         except (JSONDecodeError, UnicodeDecodeError) as e:
             raise error.APIError(
                 f"HTTP code {rcode} from API ({rbody})", rbody, rcode, headers=rheaders
