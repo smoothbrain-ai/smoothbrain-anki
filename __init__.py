@@ -195,6 +195,7 @@ def get_filtered_readwise_highlights():
 @log_exceptions(logger)
 def complete(prompt, model):
     set_openai_api_parameters(config)
+    # https://platform.openai.com/playground?mode=chat&model=gpt-4 is a great way to test this.
     system = """
     You are the worlds best flashcard making machine, ushering in a new age of education.
 
