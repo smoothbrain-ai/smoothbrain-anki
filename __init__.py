@@ -123,7 +123,7 @@ def do_sync():
                     if not result:
                         col.sched.suspend_cards([n.id for n in note.cards()])
                         continue
-                    # TODO: Use all of the responses, and don't add a card if it doesn't have a flashcard.
+                    # TODO: Use all of the responses, and don't add a note if it doesn't have a flashcard.
                     note["question"] = result[0]["question"]
                     note["answer"] = result[0]["answer"]
                 except json.decoder.JSONDecodeError as e:

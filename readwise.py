@@ -52,11 +52,11 @@ class ReadwiseDocument:
 
 
 class ReadwiseClient:
-    def __init__(self, api_key: str = None, latest_fetch_time=None):
+    def __init__(self, api_key: str = None):
         self._base_url = f"https://readwise.io/api/v2"
         self._parent_logger = None
         self._logger = logging.getLogger(MODULE_NAME)
-        self.latest_fetch_time = latest_fetch_time
+        self.latest_fetch_time = None
         self.set_api_key(api_key)
 
     def set_parent_logger(self, parent_logger):
@@ -73,6 +73,8 @@ class ReadwiseClient:
 
     # Taken from https://readwise.io/api_deets
     def export(self, updated_after=None):
+        # TODO: Add support for backing off
+        # The Readwise API returns a value to backoff for. See https://readwise.io/api_deets
         self._logger.info("Exporting Readwise data")
         self._update_time()
         full_data = []
