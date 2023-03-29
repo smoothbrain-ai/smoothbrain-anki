@@ -79,7 +79,11 @@ def do_sync():
 
         undo_entry = col.add_custom_undo_entry("Sync Readwise")
         docs = get_filtered_readwise_highlights()
-        docs = docs[:config["max_num_docs_to_fetch"]] if "max_num_docs_to_fetch" in config else docs
+        docs = (
+            docs[: config["max_num_docs_to_fetch"]]
+            if "max_num_docs_to_fetch" in config
+            else docs
+        )
 
         deck_id = col.decks.add_normal_deck_with_name(config["deck_name"]).id
         notes = []
@@ -99,7 +103,9 @@ def do_sync():
                     notes.append(note)
                     if added:
                         future = executor.submit(
-                            lambda h: get_ai_flashcards_for_highlight(h.text, config.get("openai_model", OPENAI_DEFAULT_MODEL))
+                            lambda h: get_ai_flashcards_for_highlight(
+                                h.text, config.get("openai_model", OPENAI_DEFAULT_MODEL)
+                            )
                             .choices[0]["message"]["content"]
                             .strip(),
                             hl,
@@ -227,8 +233,10 @@ Output: [{"question": "What is `text-davinci-002`?", "answer": "An InstructGPT m
 """
     completion = openai.ChatCompletion.create(
         model=model,
-        messages=[{"role": "system", "content": system},
-                  {"role": "user", "content": prompt}],
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": prompt},
+        ],
         temperature=0,
         n=1,
         headers={
