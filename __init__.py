@@ -42,6 +42,7 @@ config = Config(mw.addonManager)
 OPENAI_DEFAULT_MODEL = "gpt-3.5-turbo"
 
 
+# TODO: Make this a decorator so it can reset the value after the function completes (or if it errors)
 def set_openai_api_parameters(config):
     openai.api_key = config["openai_api_key"]
     openai.api_base = config.get("openai_api_base", openai.api_base)
