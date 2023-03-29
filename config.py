@@ -27,5 +27,8 @@ class Config:
         self._config()[key] = value
         self._write()
 
+    def __contains__(self, key):
+        return key in self._config()
+
     def get(self, key, default=None):
         return self._config().get(key, default)

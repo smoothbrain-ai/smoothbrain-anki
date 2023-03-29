@@ -4,5 +4,6 @@
   "openai_api_key": "",
   "openai_api_base": "https://api.openai.com/v1",
   "openai_model": "gpt-3.5-turbo",
-  "latest_fetch_time": null
+  "latest_fetch_time": null,
+  "max_num_docs_to_fetch": null
 }

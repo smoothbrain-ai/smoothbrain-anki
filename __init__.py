@@ -41,13 +41,6 @@ config = Config(mw.addonManager)
 
 OPENAI_DEFAULT_MODEL = "gpt-3.5-turbo"
 
-def max_num_docs_to_fetch():
-    return config.get("debug", dict()).get("max_num_docs_to_fetch", None)
-
-
-def max_num_highlights_to_fetch():
-    return config.get("debug", dict()).get("max_num_highlights_to_fetch", None)
-
 
 def set_openai_api_parameters(config):
     openai.api_key = config["openai_api_key"]
@@ -86,7 +79,7 @@ def do_sync():
 
         undo_entry = col.add_custom_undo_entry("Sync Readwise")
         docs = get_filtered_readwise_highlights()
-        docs = docs[: max_num_docs_to_fetch()] if max_num_docs_to_fetch() else docs
+        docs = docs[:config["max_num_docs_to_fetch"]] if "max_num_docs_to_fetch" in config else docs
 
         deck_id = col.decks.add_normal_deck_with_name(config["deck_name"]).id
         notes = []
@@ -123,16 +116,17 @@ def do_sync():
                 if want_cancel:
                     break
                 update_progress(
-                    f"Generating question {i} out of {len(future_to_note.keys())}...",
+                    f"Generating questions for highlight {i} out of {len(future_to_note.keys())}...",
                     value=i - 1,
                     max=len(future_to_note.keys()),
                 )
                 completion = future.result()
                 try:
+                    note = future_to_note[future]
                     result = json.loads(completion)
                     if not result:
+                        col.sched.suspend_cards([n.id for n in note.cards()])
                         continue
-                    note = future_to_note[future]
                     # TODO: Use all of the responses, and don't add a card if it doesn't have a flashcard.
                     note["question"] = result[0]["question"]
                     note["answer"] = result[0]["answer"]
@@ -235,6 +229,8 @@ Output: [{"question": "What is `text-davinci-002`?", "answer": "An InstructGPT m
         model=model,
         messages=[{"role": "system", "content": system},
                   {"role": "user", "content": prompt}],
+        temperature=0,
+        n=1,
         headers={
             "Helicone-Cache-Enabled": "true",
         },
